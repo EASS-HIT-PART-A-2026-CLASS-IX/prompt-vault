@@ -30,24 +30,32 @@ PromptVault/
 └── .env.example
 ```
 
+## Prerequisites
+
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) — install with:
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  exec "$SHELL" -l
+  ```
+
 ## Setup
 
-**Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/)
-
 ```bash
-# Clone and enter the project
+# 1. Clone the repo and enter the project folder
+git clone <repo-url>
 cd PromptVault
 
-# Install dependencies
+# 2. Create the virtual environment and install dependencies
 uv sync
 
-# Copy environment config
+# 3. Copy environment config
 cp .env.example .env
 
-# Run database migrations
+# 4. Create the database and run migrations
 uv run alembic upgrade head
 
-# (Optional) seed sample prompts
+# 5. (Optional) load sample prompts
 uv run python -m prompt_vault.scripts.seed_db
 ```
 
