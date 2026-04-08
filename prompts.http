@@ -1,0 +1,61 @@
+### Health check
+GET http://localhost:8000/health
+
+###
+
+### List all prompts
+GET http://localhost:8000/prompts
+
+###
+
+### Create a prompt
+POST http://localhost:8000/prompts
+Content-Type: application/json
+
+{
+  "title": "Explain recursion",
+  "text": "Explain {concept} using a simple real-world analogy. Avoid jargon.",
+  "model": "claude-sonnet-4-6",
+  "category": "learning",
+  "task_type": "explain concept",
+  "effectiveness": 5,
+  "tags": "teaching, recursion, analogy",
+  "notes": "Works best when you name the concept explicitly.",
+  "token_count": 95
+}
+
+###
+
+### Get prompt by ID
+GET http://localhost:8000/prompts/1
+
+###
+
+### Update effectiveness and notes
+PATCH http://localhost:8000/prompts/1
+Content-Type: application/json
+
+{
+  "effectiveness": 4,
+  "notes": "Still good but sometimes over-explains."
+}
+
+###
+
+### Delete a prompt
+DELETE http://localhost:8000/prompts/1
+
+###
+
+### 422 – invalid effectiveness (out of range)
+POST http://localhost:8000/prompts
+Content-Type: application/json
+
+{
+  "title": "Bad prompt",
+  "text": "Some text",
+  "model": "gpt-4o",
+  "category": "coding",
+  "task_type": "test",
+  "effectiveness": 10
+}
