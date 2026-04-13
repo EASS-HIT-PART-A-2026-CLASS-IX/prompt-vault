@@ -128,4 +128,4 @@ docker run -p 8000:8000 prompt-vault
 
 ## AI Assistance
 
-This project was built with AI assistance (Claude Sonnet 4.6 via Claude Code). The architecture follows the course sessions 03–04 pattern (FastAPI + SQLModel + Alembic). All generated code was reviewed, tests were run locally, and outputs verified via curl and the `/docs` explorer.
+This project was built with AI assistance. The architecture follows the course sessions 03–04 pattern (FastAPI + SQLModel + Alembic). All generated code was reviewed, tests were run locally, and outputs verified via curl and the `/docs` explorer.
