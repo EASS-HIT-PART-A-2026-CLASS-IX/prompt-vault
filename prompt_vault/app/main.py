@@ -2,7 +2,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 
 from .cache import get_redis
 from .database import SettingsDep, init_db
@@ -119,3 +119,38 @@ def delete_prompt(prompt_id: int, repository: RepositoryDep, settings: SettingsD
         )
     logger.info("prompt.deleted id=%s", prompt_id)
     _invalidate_list_cache(settings)
+
+
+@app.post("/prompts/{prompt_id}/refresh", tags=["prompts"])
+def refresh_prompt(
+    prompt_id: int,
+    request: Request,
+    repository: RepositoryDep,
+    settings: SettingsDep,
+) -> dict:
+    """Re-estimate token count for a prompt.
+
+    Accepts X-Trace-Id and Idempotency-Key headers.  When Redis is active,
+    a duplicate key short-circuits and returns already_refreshed=True without
+    touching the database — safe to call repeatedly from the async refresher.
+    """
+    idempotency_key = request.headers.get("Idempotency-Key", f"refresh:{prompt_id}")
+    trace_id = request.headers.get("X-Trace-Id", "none")
+    redis = get_redis(settings)
+
+    if redis is not None and redis.get(f"idempotency:{idempotency_key}"):
+        logger.info("refresh.skipped id=%s trace=%s key=%s", prompt_id, trace_id, idempotency_key)
+        return {"prompt_id": prompt_id, "already_refreshed": True}
+
+    prompt = repository.get(prompt_id)
+    if prompt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Prompt {prompt_id} not found")
+
+    estimated_tokens = max(1, len(prompt.text) // 4)
+    repository.update(prompt_id, PromptUpdate(token_count=estimated_tokens))
+
+    if redis is not None:
+        redis.setex(f"idempotency:{idempotency_key}", 86400, "1")
+
+    logger.info("refresh.done id=%s trace=%s tokens=%s", prompt_id, trace_id, estimated_tokens)
+    return {"prompt_id": prompt_id, "token_count": estimated_tokens, "already_refreshed": False}

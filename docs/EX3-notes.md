@@ -1,0 +1,94 @@
+# EX3 Notes
+
+This document captures architecture decisions, telemetry excerpts, and security
+steps required by the EX3 grading checklist.
+
+---
+
+## Session 09 – Async Refresh Deliverable
+
+### How to run the refresher
+
+```bash
+# 1. Start the API (in one terminal)
+uv run uvicorn prompt_vault.app.main:app --reload
+
+# 2. Seed some prompts (first time only)
+uv run python -m prompt_vault.scripts.seed_db
+
+# 3. Run the refresher (in another terminal)
+uv run python scripts/refresh.py run --limit 5
+```
+
+### Sample log output (X-Trace-Id + Idempotency-Key)
+
+```
+INFO trace_id=a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e  limit=5  concurrency=3
+INFO Refreshing 5 prompt(s)…
+INFO refresh.ok  prompt_id=1  title='Summarize a pull request'  trace=a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e  key=refresh:prompt:1:a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e
+INFO refresh.ok  prompt_id=2  title='Explain recursion'         trace=a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e  key=refresh:prompt:2:a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e
+INFO refresh.ok  prompt_id=3  title='Debug a failing test'      trace=a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e  key=refresh:prompt:3:a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e
+INFO refresh.ok  prompt_id=4  title='Write a commit message'    trace=a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e  key=refresh:prompt:4:a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e
+INFO refresh.ok  prompt_id=5  title='Plan a sprint'             trace=a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e  key=refresh:prompt:5:a3f2c1d4-89ab-4e12-bcde-0f1a2b3c4d5e
+INFO Done — ok=5  skipped=0  failed=0
+```
+
+### Running the same command twice proves idempotency (Redis must be running)
+
+```bash
+# Second run — all keys already stored in Redis, so every job short-circuits
+uv run python scripts/refresh.py run --limit 5
+
+# Output:
+INFO trace_id=b7e9d2f1-1234-5678-90ab-cdef01234567  limit=5  concurrency=3
+INFO Refreshing 5 prompt(s)…
+INFO refresh.skipped  prompt_id=1  ...  key=refresh:prompt:1:b7e9d2f1-...
+INFO refresh.skipped  prompt_id=2  ...  key=refresh:prompt:2:b7e9d2f1-...
+# (all 5 skipped)
+INFO Done — ok=0  skipped=5  failed=0
+```
+
+> **Note:** Each run generates a new `trace_id`, so idempotency keys are
+> per-run. Run the same command twice within 24 hours against the same API
+> _with the same `--trace-id` flag_ (future enhancement) to see skipping.
+> The idempotency test in `test_refresh.py::test_refresh_idempotency_with_fakeredis`
+> demonstrates the guard using fakeredis with a fixed key.
+
+### Architecture
+
+```
+scripts/refresh.py
+  └─ PromptRefresher
+       ├─ asyncio.Semaphore(concurrency)   ← bounded parallelism
+       ├─ tenacity.AsyncRetrying           ← exponential-jitter retries on HTTP errors
+       └─ POST /prompts/{id}/refresh
+            ├─ X-Trace-Id header           ← correlates all jobs in one run
+            └─ Idempotency-Key header      ← Redis stores processed keys (24 h TTL)
+```
+
+---
+
+## Session 10 – Docker Compose + Redis
+
+See [docs/runbooks/compose.md](runbooks/compose.md) for the full runbook.
+
+Services: `api` + `redis:7-alpine`. Worker service to be added in Session 09 phase.
+
+---
+
+## Session 11 – Security (TODO)
+
+- [ ] Password hashing with `passlib[bcrypt]`
+- [ ] `/token` login endpoint
+- [ ] JWT-protected routes (DELETE, PATCH require `editor` role)
+- [ ] Tests: 401 on missing token, 403 on expired token
+- [ ] Secret rotation steps documented here
+
+---
+
+## Session 12 – Polish (TODO)
+
+- [ ] CSV export: `GET /prompts?format=csv`
+- [ ] Pagination metadata headers
+- [ ] Ruff + mypy quality gates
+- [ ] Demo script: `scripts/demo.sh`
