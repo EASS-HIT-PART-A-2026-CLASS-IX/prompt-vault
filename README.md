@@ -67,6 +67,30 @@ uv run uvicorn prompt_vault.app.main:app --reload
 
 Open `http://localhost:8000/docs` for the interactive API explorer.
 
+## Run the dashboard (EX2)
+
+The Streamlit dashboard provides a browser UI for browsing prompts, adding new ones, and viewing effectiveness analytics.
+
+**Start both services side-by-side** (two terminal tabs):
+
+```bash
+# Terminal 1 — backend
+uv run uvicorn prompt_vault.app.main:app --reload
+
+# Terminal 2 — dashboard
+uv run streamlit run dashboard/app.py
+```
+
+Open `http://localhost:8501` in your browser. The dashboard connects to the API on `http://localhost:8000` by default.
+
+### Dashboard features
+
+| Tab | What it does |
+|---|---|
+| Browse Prompts | Lists all prompts; filter by category or tag; expand any row to read the full prompt text |
+| Add Prompt | Form to create a new prompt without touching the API directly |
+| Analytics | Bar chart of average effectiveness per category (small extra) |
+
 ## API endpoints
 
 | Method | Path | Description |
