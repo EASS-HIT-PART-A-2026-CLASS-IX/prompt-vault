@@ -152,4 +152,6 @@ docker run -p 8000:8000 prompt-vault
 
 ## AI Assistance
 
-This project was built with AI assistance. The architecture follows the course sessions 03–04 pattern (FastAPI + SQLModel + Alembic). All generated code was reviewed, tests were run locally, and outputs verified via curl and the `/docs` explorer.
+**EX1 (FastAPI backend):** Built with AI assistance following the sessions 03–04 pattern (FastAPI + SQLModel + Alembic). All generated code was reviewed, tests were run locally, and outputs verified via curl and the `/docs` explorer.
+
+**EX2 (Streamlit dashboard):** Dashboard structure and helper functions drafted with AI assistance. The three-tab layout (Browse / Add / Analytics), filter logic, and form validation were reviewed and tested manually by running the API and dashboard side-by-side. Tests in `test_dashboard.py` were verified with `uv run pytest`.
