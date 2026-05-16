@@ -2,13 +2,18 @@ import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 
 from .cache import get_redis
 from .database import SettingsDep, init_db
 from .dependencies import RepositoryDep
 from .models import PromptCreate, PromptRead, PromptUpdate
 from .rate_limit import rate_limit_middleware
+from .routes.auth import router as auth_router
+from .security import require_role
+
+# Module-level dep instances — tests override these via app.dependency_overrides
+_require_editor = require_role("editor")
 
 logger = logging.getLogger("prompt-vault")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -28,6 +33,7 @@ app = FastAPI(
 )
 
 app.middleware("http")(rate_limit_middleware)
+app.include_router(auth_router)
 
 
 @app.get("/health", tags=["diagnostics"])
@@ -94,7 +100,11 @@ def read_prompt(prompt_id: int, repository: RepositoryDep) -> PromptRead:
 
 @app.patch("/prompts/{prompt_id}", response_model=PromptRead, tags=["prompts"])
 def update_prompt(
-    prompt_id: int, payload: PromptUpdate, repository: RepositoryDep, settings: SettingsDep
+    prompt_id: int,
+    payload: PromptUpdate,
+    repository: RepositoryDep,
+    settings: SettingsDep,
+    _auth: dict = Depends(_require_editor),
 ) -> PromptRead:
     """Update fields on an existing prompt (e.g. effectiveness, notes)."""
     prompt = repository.update(prompt_id, payload)
@@ -109,7 +119,12 @@ def update_prompt(
 
 
 @app.delete("/prompts/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["prompts"])
-def delete_prompt(prompt_id: int, repository: RepositoryDep, settings: SettingsDep) -> None:
+def delete_prompt(
+    prompt_id: int,
+    repository: RepositoryDep,
+    settings: SettingsDep,
+    _auth: dict = Depends(_require_editor),
+) -> None:
     """Delete a prompt from the vault."""
     deleted = repository.delete(prompt_id)
     if not deleted:
@@ -127,6 +142,7 @@ def refresh_prompt(
     request: Request,
     repository: RepositoryDep,
     settings: SettingsDep,
+    _auth: dict = Depends(_require_editor),
 ) -> dict:
     """Re-estimate token count for a prompt.
 

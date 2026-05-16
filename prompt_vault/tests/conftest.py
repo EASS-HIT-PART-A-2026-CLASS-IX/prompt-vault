@@ -6,7 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from prompt_vault.app import models  # noqa: F401
 from prompt_vault.app.database import get_session
-from prompt_vault.app.main import app
+from prompt_vault.app.main import _require_editor, app
 
 
 @pytest.fixture(name="engine")
@@ -35,7 +35,9 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     def get_session_override() -> Generator[Session, None, None]:
         yield session
 
+    # Bypass JWT auth so CRUD tests focus on business logic, not auth
     app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[_require_editor] = lambda: {"sub": "test", "roles": ["editor"]}
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

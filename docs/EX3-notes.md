@@ -76,13 +76,69 @@ Services: `api` + `redis:7-alpine`. Worker service to be added in Session 09 pha
 
 ---
 
-## Session 11 – Security (TODO)
+## Session 11 – Security Baseline
 
-- [ ] Password hashing with `passlib[bcrypt]`
-- [ ] `/token` login endpoint
-- [ ] JWT-protected routes (DELETE, PATCH require `editor` role)
-- [ ] Tests: 401 on missing token, 403 on expired token
-- [ ] Secret rotation steps documented here
+### What's protected
+
+| Route | Requires |
+|---|---|
+| `POST /token` | public (issues JWT) |
+| `GET /prompts`, `GET /prompts/{id}`, `POST /prompts` | public |
+| `PATCH /prompts/{id}` | `editor` role |
+| `DELETE /prompts/{id}` | `editor` role |
+| `POST /prompts/{id}/refresh` | `editor` role |
+
+### Password hashing
+
+Passwords are hashed with `bcrypt` (cost factor 12) at server startup — never
+stored in plaintext.  The `_USERS` dict in `routes/auth.py` holds the hashes.
+
+### JWT claims
+
+```json
+{
+  "sub": "admin",
+  "iat": 1716123456,
+  "exp": 1716125256,
+  "iss": "prompt-vault",
+  "aud": "prompt-vault-clients",
+  "roles": ["editor", "student"]
+}
+```
+
+### Demo: obtain and use a token
+
+```bash
+# Get a token (admin = editor + student roles)
+TOKEN=$(curl -s -X POST http://localhost:8000/token \
+  -d "username=admin&password=vault-admin" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  | jq -r '.access_token')
+
+# Call a protected endpoint
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/prompts/1/refresh
+
+# Confirm unauthenticated request is rejected
+curl -i -X DELETE http://localhost:8000/prompts/1
+# → 401 Unauthorized
+```
+
+### Secret rotation steps
+
+1. Generate a new secret:
+   ```bash
+   python -c "import secrets; print(secrets.token_hex(32))"
+   ```
+2. Update `PROMPT_VAULT_JWT_SECRET` in `.env` (or in Docker/CI secrets).
+3. Restart the API — existing tokens signed with the old secret will be immediately
+   rejected (they are short-lived, 30 min by default).
+4. Update `compose.yaml` environment block if using Docker Compose.
+
+### Tests
+
+- `test_security.py` covers: login success/failure, 401 without token,
+  403 with wrong role, 401 with expired token, 403 with missing role claim.
+- All 12 security tests pass without a live Redis or database.
 
 ---
 

@@ -13,7 +13,7 @@ import pytest
 from sqlmodel import Session
 
 from prompt_vault.app.database import get_session
-from prompt_vault.app.main import app as fastapi_app
+from prompt_vault.app.main import _require_editor, app as fastapi_app
 from scripts.refresh import PromptRefresher, RefreshJob
 
 _SAMPLE = {
@@ -37,6 +37,7 @@ def _asgi_client(session: Session) -> httpx.AsyncClient:
         yield session
 
     fastapi_app.dependency_overrides[get_session] = _override
+    fastapi_app.dependency_overrides[_require_editor] = lambda: {"sub": "test", "roles": ["editor"]}
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=fastapi_app),
         base_url="http://testserver",
