@@ -137,3 +137,29 @@ def test_delete_prompt(client):
 def test_delete_missing_prompt_returns_404(client):
     response = client.delete("/prompts/9999")
     assert response.status_code == 404
+
+
+# --- CSV export ---
+
+def test_csv_export_returns_csv(client):
+    client.post("/prompts", json=SAMPLE)
+    response = client.get("/prompts?format=csv")
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    lines = response.text.strip().splitlines()
+    assert lines[0].startswith("id,")          # header row present
+    assert len(lines) >= 2                      # at least one data row
+
+
+def test_csv_export_contains_expected_fields(client):
+    client.post("/prompts", json=SAMPLE)
+    response = client.get("/prompts?format=csv")
+    header = response.text.splitlines()[0]
+    for field in ("title", "category", "effectiveness", "tags"):
+        assert field in header
+
+
+def test_csv_export_empty_vault_returns_header_only(client):
+    response = client.get("/prompts?format=csv")
+    lines = response.text.strip().splitlines()
+    assert len(lines) == 1                      # only the header, no data rows

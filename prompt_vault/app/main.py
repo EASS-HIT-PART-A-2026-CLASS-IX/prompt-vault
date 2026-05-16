@@ -1,8 +1,12 @@
+import csv
+import io
 import json
 import logging
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 
 from .cache import get_redis
 from .database import SettingsDep, init_db
@@ -41,23 +45,41 @@ def health(settings: SettingsDep) -> dict[str, str]:
     return {"status": "ok", "app": settings.app_name}
 
 
+_CSV_FIELDS = ["id", "title", "category", "effectiveness", "tags", "model", "task_type", "token_count", "notes", "text"]
+
+
 @app.get("/prompts", response_model=list[PromptRead], tags=["prompts"])
 def list_prompts(
     repository: RepositoryDep,
     settings: SettingsDep,
     skip: int = 0,
     limit: int = 100,
-) -> list[PromptRead]:
-    """List all saved prompts with optional pagination. Cached in Redis for 60 s."""
+    format: Literal["json", "csv"] = "json",
+):
+    """List all saved prompts.  Add `?format=csv` to download as a spreadsheet.
+    JSON responses are cached in Redis for 60 s."""
     cache_key = f"prompts:list:{skip}:{limit}"
     redis = get_redis(settings)
 
-    if redis is not None:
+    if format == "json" and redis is not None:
         cached = redis.get(cache_key)
         if cached:
             return json.loads(cached)
 
     result = repository.list(skip=skip, limit=limit)
+
+    if format == "csv":
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=_CSV_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        for p in result:
+            writer.writerow(p.model_dump())
+        buf.seek(0)
+        return StreamingResponse(
+            iter([buf.read()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="prompts.csv"'},
+        )
 
     if redis is not None:
         redis.setex(cache_key, 60, json.dumps([p.model_dump() for p in result]))

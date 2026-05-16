@@ -142,9 +142,32 @@ curl -i -X DELETE http://localhost:8000/prompts/1
 
 ---
 
-## Session 12 – Polish (TODO)
+## Session 12 – Enhancement: CSV Export
 
-- [ ] CSV export: `GET /prompts?format=csv`
-- [ ] Pagination metadata headers
-- [ ] Ruff + mypy quality gates
-- [ ] Demo script: `scripts/demo.sh`
+`GET /prompts?format=csv` streams all prompts as a downloadable spreadsheet.
+
+```bash
+# Download all prompts as CSV
+curl -o prompts.csv "http://localhost:8000/prompts?format=csv"
+
+# Preview first 3 lines
+head -3 prompts.csv
+# id,title,category,effectiveness,tags,model,task_type,token_count,notes,text
+# 1,Summarize a pull request,coding,4,"git,review,pr",claude-sonnet-4-6,code review,120,,Review the following git diff…
+# 2,Explain recursion,learning,5,"teaching,recursion",claude-sonnet-4-6,explain concept,95,,Explain {concept} using…
+```
+
+Fields exported: `id, title, category, effectiveness, tags, model, task_type, token_count, notes, text`
+
+3 tests in `test_prompts.py` cover: CSV content-type header, expected field names, empty vault (header-only row).
+
+## Demo Script
+
+```bash
+# Start the API first, then run:
+bash scripts/demo.sh
+```
+
+The script walks through all EX3 features end-to-end: health check, seed,
+JSON listing, CSV export, JWT login, create prompt, refresh, auth rejection,
+async refresher, and dashboard launch instructions.
