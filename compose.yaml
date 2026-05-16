@@ -8,11 +8,28 @@ services:
     environment:
       PROMPT_VAULT_REDIS_URL: redis://redis:6379/0
       PROMPT_VAULT_RATE_LIMIT_PER_MINUTE: 30
+      PROMPT_VAULT_ANALYZER_URL: http://analyzer:8001
     depends_on:
       redis:
         condition: service_healthy
+      analyzer:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  analyzer:
+    build:
+      context: .
+      dockerfile: analyzer/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 5s
       retries: 3

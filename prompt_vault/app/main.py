@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Literal
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
@@ -192,3 +193,40 @@ def refresh_prompt(
 
     logger.info("refresh.done id=%s trace=%s tokens=%s", prompt_id, trace_id, estimated_tokens)
     return {"prompt_id": prompt_id, "token_count": estimated_tokens, "already_refreshed": False}
+
+
+@app.post("/prompts/{prompt_id}/analyze", tags=["prompts"])
+async def analyze_prompt(
+    prompt_id: int,
+    repository: RepositoryDep,
+    settings: SettingsDep,
+) -> dict:
+    """Send the prompt to the LLM analyzer microservice and return quality suggestions.
+
+    The analyzer runs on a separate service (port 8001).  If it is unreachable,
+    a 503 is returned so the main API stays healthy.
+    """
+    prompt = repository.get(prompt_id)
+    if prompt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Prompt {prompt_id} not found")
+
+    payload = {
+        "title": prompt.title,
+        "text": prompt.text,
+        "category": prompt.category,
+        "current_effectiveness": prompt.effectiveness,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(f"{settings.analyzer_url}/analyze", json=payload)
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("analyzer.unreachable prompt_id=%s error=%s", prompt_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Analyzer service is unavailable. Start it with: uv run uvicorn analyzer.main:app --port 8001",
+        ) from exc
+
+    logger.info("analyzer.done prompt_id=%s", prompt_id)
+    return {"prompt_id": prompt_id, **resp.json()}

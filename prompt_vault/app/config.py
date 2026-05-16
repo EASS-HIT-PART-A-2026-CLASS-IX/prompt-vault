@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     jwt_issuer: str = "prompt-vault"
     jwt_audience: str = "prompt-vault-clients"
     jwt_expiry_minutes: int = 30
+    analyzer_url: str = "http://localhost:8001"
 
     model_config = SettingsConfigDict(
         env_file=".env",

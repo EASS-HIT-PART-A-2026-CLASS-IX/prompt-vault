@@ -68,6 +68,65 @@ scripts/refresh.py
 
 ---
 
+## 4th Microservice – Prompt Analyzer (Pydantic AI + Claude)
+
+A standalone FastAPI service (`analyzer/`) that uses Pydantic AI with
+`claude-haiku-4-5` to score prompt quality and suggest improvements.
+
+### Architecture
+
+```
+POST /prompts/{id}/analyze   (main API)
+       │
+       └─► POST /analyze     (analyzer service, port 8001)
+                │
+                └─► Pydantic AI Agent → claude-haiku-4-5
+                         └─► AnalyzeResponse (suggested_effectiveness, suggestions, summary)
+```
+
+### Mock mode (no API key needed)
+
+When `ANTHROPIC_API_KEY` is absent the analyzer returns a deterministic mock
+response so the whole stack runs locally without any cloud calls.
+
+### How to run side-by-side
+
+```bash
+# Terminal 1 — main API
+uv run uvicorn prompt_vault.app.main:app --reload
+
+# Terminal 2 — analyzer (mock mode without key, real Claude with key)
+ANTHROPIC_API_KEY=sk-ant-... uv run uvicorn analyzer.main:app --port 8001 --reload
+
+# Analyze a prompt
+curl -X POST http://localhost:8000/prompts/1/analyze | python3 -m json.tool
+```
+
+### Sample response
+
+```json
+{
+  "prompt_id": 1,
+  "suggested_effectiveness": 4,
+  "suggestions": [
+    "Add a concrete example or placeholder variable.",
+    "Specify the desired output format (list, paragraph, JSON).",
+    "State constraints: length, tone, target audience."
+  ],
+  "summary": "Well-structured prompt; adding format constraints would make it production-ready."
+}
+```
+
+### Tests
+
+6 tests in `test_analyzer.py`:
+- Mock response when no API key
+- Analyzer `/health` via ASGITransport
+- Analyzer `/analyze` schema validation
+- Main API proxy: successful call, 404 on missing prompt, 503 when analyzer down
+
+---
+
 ## Session 10 – Docker Compose + Redis
 
 See [docs/runbooks/compose.md](runbooks/compose.md) for the full runbook.
