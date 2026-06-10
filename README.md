@@ -150,8 +150,100 @@ docker run -p 8000:8000 prompt-vault
 | `token_count` | int | Optional, ≥ 1 |
 | `version` | int | Default 1 |
 
+## EX3 – Full-Stack Microservices
+
+EX3 adds four production-grade layers on top of the EX1/EX2 foundation.
+
+### 1. Docker Compose stack
+
+Three cooperating services in `compose.yaml`:
+
+```bash
+docker compose up --build
+```
+
+| Service | Port | Role |
+|---|---|---|
+| `api` | 8000 | FastAPI backend + Redis-backed cache and rate limiting |
+| `analyzer` | 8001 | Pydantic AI microservice (LLM prompt analysis) |
+| `redis` | 6379 | Cache (60 s TTL) + idempotency keys (24 h TTL) |
+
+See `docs/runbooks/compose.md` for health checks, rate-limit headers, and CI instructions.
+
+### 2. Async refresh script
+
+`scripts/refresh.py` refreshes token-count estimates for all prompts concurrently:
+
+```bash
+uv run python scripts/refresh.py run --limit 10 --concurrency 3
+```
+
+Features: `asyncio.Semaphore` for bounded parallelism, `tenacity` exponential-jitter retries, and Redis-backed idempotency keys — duplicate jobs short-circuit in under 1 ms.
+
+### 3. JWT authentication and role-based access control
+
+| Route | Requires |
+|---|---|
+| `POST /token` | public (issues JWT) |
+| `GET /prompts*` | public |
+| `PATCH /prompts/{id}`, `DELETE /prompts/{id}`, `POST /prompts/{id}/refresh` | `editor` role |
+
+```bash
+# Obtain a token and call a protected route
+TOKEN=$(curl -s -X POST http://localhost:8000/token \
+  -d "username=admin&password=vault-admin" \
+  -H "Content-Type: application/x-www-form-urlencoded" | jq -r '.access_token')
+
+curl -H "Authorization: Bearer $TOKEN" -X DELETE http://localhost:8000/prompts/1
+```
+
+Passwords are hashed with bcrypt (cost 12). See `docs/EX3-notes.md` for JWT claims and secret rotation steps.
+
+### 4. LLM analyzer microservice
+
+`POST /prompts/{id}/analyze` proxies to the `analyzer` service, which uses Pydantic AI with `claude-haiku-4-5` to score prompt quality:
+
+```bash
+curl -X POST http://localhost:8000/prompts/1/analyze | python3 -m json.tool
+```
+
+```json
+{
+  "prompt_id": 1,
+  "suggested_effectiveness": 4,
+  "suggestions": ["Add a concrete example.", "Specify output format.", "State target audience."],
+  "summary": "Well-structured prompt; adding format constraints would make it production-ready."
+}
+```
+
+The **Browse Prompts** tab in the Streamlit dashboard now shows an **Analyze with AI** button on any expanded prompt.
+
+Run the analyzer without an API key (mock mode):
+
+```bash
+uv run uvicorn analyzer.main:app --port 8001 --reload
+```
+
+### 5. CSV export
+
+```bash
+curl -o prompts.csv "http://localhost:8000/prompts?format=csv"
+```
+
+### Demo
+
+```bash
+bash scripts/demo.sh
+```
+
+Walks through all EX3 features: health check, seed, JSON/CSV listing, JWT login, create, refresh, auth rejection, async refresh, and dashboard.
+
+---
+
 ## AI Assistance
 
 **EX1 (FastAPI backend):** Built with AI assistance following the sessions 03–04 pattern (FastAPI + SQLModel + Alembic). All generated code was reviewed, tests were run locally, and outputs verified via curl and the `/docs` explorer.
 
 **EX2 (Streamlit dashboard):** Dashboard structure and helper functions drafted with AI assistance. The three-tab layout (Browse / Add / Analytics), filter logic, and form validation were reviewed and tested manually by running the API and dashboard side-by-side. Tests in `test_dashboard.py` were verified with `uv run pytest`.
+
+**EX3 (Full-stack microservices):** Redis caching, rate limiting, async refresh script, JWT security, analyzer microservice, CSV export, and Docker Compose orchestration all developed with AI assistance. Architecture decisions were reviewed session by session; all 46 tests were run locally and verified green before each commit.

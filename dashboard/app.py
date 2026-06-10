@@ -19,6 +19,12 @@ def create_prompt(payload: dict) -> dict:
     return resp.json()
 
 
+def analyze_prompt(prompt_id: int) -> dict:
+    resp = httpx.post(f"{API_URL}/prompts/{prompt_id}/analyze", timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def main() -> None:
     st.set_page_config(page_title="Prompt Vault", layout="wide")
     st.title("Prompt Vault")
@@ -80,6 +86,21 @@ def main() -> None:
                 st.code(p["text"], language=None)
                 if p.get("notes"):
                     st.markdown(f"**Notes:** {p['notes']}")
+
+                if st.button("Analyze with AI", key=f"analyze_{chosen_id}"):
+                    with st.spinner("Calling analyzer…"):
+                        try:
+                            analysis = analyze_prompt(chosen_id)
+                            st.markdown(f"**Suggested effectiveness:** {analysis['suggested_effectiveness']}/5")
+                            st.markdown("**Suggestions:**")
+                            for s in analysis["suggestions"]:
+                                st.markdown(f"- {s}")
+                            st.markdown(f"**Summary:** {analysis['summary']}")
+                        except Exception as exc:
+                            st.warning(
+                                f"Analyzer unavailable — start it with:\n\n"
+                                f"`uv run uvicorn analyzer.main:app --port 8001 --reload`\n\n`{exc}`"
+                            )
 
     # ── Add ───────────────────────────────────────────────────────────────────
     with tab_add:

@@ -83,3 +83,51 @@ uv run pytest prompt_vault/tests -v
 
 Tests use an in-memory SQLite and skip Redis (no `PROMPT_VAULT_REDIS_URL` set locally),
 so they run independently of the Compose stack.
+
+## Run Schemathesis contract tests
+
+[Schemathesis](https://schemathesis.readthedocs.io) generates test cases from the
+OpenAPI spec and fires them at the live API to catch schema violations and 5xx errors.
+
+```bash
+# Install (one-time)
+pip install schemathesis
+
+# Start the compose stack first, then:
+schemathesis run http://localhost:8000/openapi.json --checks not_a_server_error
+
+# Stricter: fail on any 4xx/5xx that isn't explicitly declared in the spec
+schemathesis run http://localhost:8000/openapi.json --checks all
+```
+
+Sample output (all checks pass):
+
+```
+Schemathesis test run started …
+  GET /health ✓  (1 case)
+  GET /prompts ✓  (15 cases)
+  POST /prompts ✓  (10 cases)
+  …
+100% passed
+```
+
+## CI pipeline (GitHub Actions)
+
+The repository ships a workflow at `.github/workflows/ci.yaml` with two jobs:
+
+| Job | What it does |
+|---|---|
+| `test` | Installs uv + Python 3.13, runs `uv sync --all-groups`, executes `pytest prompt_vault/tests -v` |
+| `schemathesis` | Runs after `test`, starts the API, runs `schemathesis run … --checks not_a_server_error` |
+
+To run the same checks locally without Docker:
+
+```bash
+# pytest
+uv run pytest prompt_vault/tests -v
+
+# schemathesis (requires a running API on port 8000)
+uv run uvicorn prompt_vault.app.main:app &
+sleep 2
+schemathesis run http://localhost:8000/openapi.json --checks not_a_server_error
+```
