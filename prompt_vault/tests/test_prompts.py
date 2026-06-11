@@ -22,6 +22,14 @@ def test_health(client):
     assert data["app"] == "Prompt Vault"
 
 
+def test_health_includes_dependency_status(client):
+    data = client.get("/health").json()
+    # Redis is disabled in tests (no redis_url set) — key must still be present
+    assert data["redis"] == "disabled"
+    # Analyzer URL is always reported so operators know where to point the service
+    assert data["analyzer"].startswith("http")
+
+
 # --- create ---
 
 def test_create_prompt_returns_201(client):

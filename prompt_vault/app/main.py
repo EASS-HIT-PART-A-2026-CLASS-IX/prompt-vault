@@ -43,7 +43,19 @@ app.include_router(auth_router)
 
 @app.get("/health", tags=["diagnostics"])
 def health(settings: SettingsDep) -> dict[str, str]:
-    return {"status": "ok", "app": settings.app_name}
+    redis_status = "disabled"
+    if settings.redis_url:
+        try:
+            r = get_redis(settings)
+            redis_status = "connected" if (r and r.ping()) else "unreachable"
+        except Exception:
+            redis_status = "unreachable"
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "redis": redis_status,
+        "analyzer": settings.analyzer_url,
+    }
 
 
 _CSV_FIELDS = ["id", "title", "category", "effectiveness", "tags", "model", "task_type", "token_count", "notes", "text"]

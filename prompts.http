@@ -1,14 +1,47 @@
-### Health check
+### ── Diagnostics ────────────────────────────────────────────────────────────
+
+### Health check (shows Redis + analyzer status)
 GET http://localhost:8000/health
 
 ###
 
-### List all prompts
+### ── Authentication ─────────────────────────────────────────────────────────
+
+### Get a JWT (admin = editor + student roles)
+# @name login
+POST http://localhost:8000/token
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=vault-admin
+
+###
+
+### Get a JWT (student role only)
+POST http://localhost:8000/token
+Content-Type: application/x-www-form-urlencoded
+
+username=student&password=vault-student
+
+###
+
+### ── Prompts (public) ────────────────────────────────────────────────────────
+
+### List all prompts (JSON)
 GET http://localhost:8000/prompts
 
 ###
 
-### Create a prompt
+### List with pagination
+GET http://localhost:8000/prompts?skip=0&limit=5
+
+###
+
+### Export all prompts as CSV
+GET http://localhost:8000/prompts?format=csv
+
+###
+
+### Create a prompt (public — no auth needed)
 POST http://localhost:8000/prompts
 Content-Type: application/json
 
@@ -31,9 +64,17 @@ GET http://localhost:8000/prompts/1
 
 ###
 
-### Update effectiveness and notes
+### Analyze a prompt with the LLM analyzer (public)
+POST http://localhost:8000/prompts/1/analyze
+
+###
+
+### ── Prompts (editor role required) ─────────────────────────────────────────
+
+### Update effectiveness and notes  [requires editor JWT]
 PATCH http://localhost:8000/prompts/1
 Content-Type: application/json
+Authorization: Bearer {{login.response.body.access_token}}
 
 {
   "effectiveness": 4,
@@ -42,12 +83,28 @@ Content-Type: application/json
 
 ###
 
-### Delete a prompt
+### Refresh token count  [requires editor JWT + optional idempotency headers]
+POST http://localhost:8000/prompts/1/refresh
+Authorization: Bearer {{login.response.body.access_token}}
+X-Trace-Id: my-trace-001
+Idempotency-Key: refresh:prompt:1:my-trace-001
+
+###
+
+### Delete a prompt  [requires editor JWT]
+DELETE http://localhost:8000/prompts/1
+Authorization: Bearer {{login.response.body.access_token}}
+
+###
+
+### ── Error cases ─────────────────────────────────────────────────────────────
+
+### 401 – missing token on a protected route
 DELETE http://localhost:8000/prompts/1
 
 ###
 
-### 422 – invalid effectiveness (out of range)
+### 422 – effectiveness out of range
 POST http://localhost:8000/prompts
 Content-Type: application/json
 
