@@ -25,6 +25,26 @@ def analyze_prompt(prompt_id: int) -> dict:
     return resp.json()
 
 
+def delete_prompt(prompt_id: int, token: str) -> None:
+    resp = httpx.delete(
+        f"{API_URL}/prompts/{prompt_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=5,
+    )
+    resp.raise_for_status()
+
+
+def get_token(username: str, password: str) -> str:
+    resp = httpx.post(
+        f"{API_URL}/token",
+        data={"username": username, "password": password},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=5,
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+
 def main() -> None:
     st.set_page_config(page_title="Prompt Vault", layout="wide")
     st.title("Prompt Vault")
@@ -87,20 +107,45 @@ def main() -> None:
                 if p.get("notes"):
                     st.markdown(f"**Notes:** {p['notes']}")
 
-                if st.button("Analyze with AI", key=f"analyze_{chosen_id}"):
-                    with st.spinner("Calling analyzer…"):
-                        try:
-                            analysis = analyze_prompt(chosen_id)
-                            st.markdown(f"**Suggested effectiveness:** {analysis['suggested_effectiveness']}/5")
-                            st.markdown("**Suggestions:**")
-                            for s in analysis["suggestions"]:
-                                st.markdown(f"- {s}")
-                            st.markdown(f"**Summary:** {analysis['summary']}")
-                        except Exception as exc:
-                            st.warning(
-                                f"Analyzer unavailable — start it with:\n\n"
-                                f"`uv run uvicorn analyzer.main:app --port 8001 --reload`\n\n`{exc}`"
-                            )
+                col_analyze, col_delete = st.columns([2, 1])
+
+                with col_analyze:
+                    if st.button("Analyze with AI", key=f"analyze_{chosen_id}"):
+                        with st.spinner("Calling analyzer…"):
+                            try:
+                                analysis = analyze_prompt(chosen_id)
+                                st.markdown(f"**Suggested effectiveness:** {analysis['suggested_effectiveness']}/5")
+                                st.markdown("**Suggestions:**")
+                                for s in analysis["suggestions"]:
+                                    st.markdown(f"- {s}")
+                                st.markdown(f"**Summary:** {analysis['summary']}")
+                            except Exception as exc:
+                                st.warning(
+                                    f"Analyzer unavailable — start it with:\n\n"
+                                    f"`uv run uvicorn analyzer.main:app --port 8001 --reload`\n\n`{exc}`"
+                                )
+
+                with col_delete:
+                    if st.button("Delete prompt", key=f"delete_{chosen_id}", type="secondary"):
+                        st.session_state[f"confirm_delete_{chosen_id}"] = True
+
+                if st.session_state.get(f"confirm_delete_{chosen_id}"):
+                    st.warning(f"Delete **#{chosen_id}: {p['title']}**? This cannot be undone.")
+                    col_yes, col_no = st.columns(2)
+                    with col_yes:
+                        if st.button("Yes, delete", key=f"yes_{chosen_id}", type="primary"):
+                            try:
+                                token = get_token("admin", "vault-admin")
+                                delete_prompt(chosen_id, token)
+                                st.success("Prompt deleted.")
+                                st.session_state.pop(f"confirm_delete_{chosen_id}", None)
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"Delete failed: {exc}")
+                    with col_no:
+                        if st.button("Cancel", key=f"no_{chosen_id}"):
+                            st.session_state.pop(f"confirm_delete_{chosen_id}", None)
+                            st.rerun()
 
     # ── Add ───────────────────────────────────────────────────────────────────
     with tab_add:
