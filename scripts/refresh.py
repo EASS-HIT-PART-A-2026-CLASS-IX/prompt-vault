@@ -5,9 +5,9 @@ tenacity retries.  Redis idempotency keys (stored by the API) prevent
 duplicate work when the script is run multiple times.
 
 Usage:
-    uv run python scripts/refresh.py run
-    uv run python scripts/refresh.py run --limit 5 --concurrency 2
-    uv run python scripts/refresh.py run --base-url http://localhost:8000
+    uv run python scripts/refresh.py
+    uv run python scripts/refresh.py --limit 5 --concurrency 2
+    uv run python scripts/refresh.py --base-url http://localhost:8000
 """
 from __future__ import annotations
 

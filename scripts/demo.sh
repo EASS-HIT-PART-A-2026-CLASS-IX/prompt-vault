@@ -73,7 +73,7 @@ STATUS=$(curl -so /dev/null -w "%{http_code}" -X DELETE "$API/prompts/$DEMO_ID")
 
 # ── 9. Async refresh script ───────────────────────────────────────────────────
 step "9. Async refresh script (limit=3)"
-uv run python scripts/refresh.py run --limit 3
+uv run python scripts/refresh.py --limit 3
 
 # ── 10. Dashboard ─────────────────────────────────────────────────────────────
 step "10. Dashboard"
