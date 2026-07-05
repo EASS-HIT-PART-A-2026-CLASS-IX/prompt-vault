@@ -101,16 +101,26 @@ def run(
     limit: int = typer.Option(10, help="Max prompts to refresh."),
     concurrency: int = typer.Option(_DEFAULT_CONCURRENCY, help="Parallel refresh jobs."),
     base_url: str = typer.Option(_DEFAULT_BASE_URL, help="API base URL."),
+    username: str = typer.Option("admin", help="Username for JWT auth."),
+    password: str = typer.Option("vault-admin", help="Password for JWT auth."),
 ) -> None:
     """Refresh token-count estimates for all prompts with bounded async concurrency."""
-    asyncio.run(_run(limit=limit, concurrency=concurrency, base_url=base_url))
+    asyncio.run(_run(limit=limit, concurrency=concurrency, base_url=base_url, username=username, password=password))
 
 
-async def _run(limit: int, concurrency: int, base_url: str) -> None:
+async def _run(limit: int, concurrency: int, base_url: str, username: str, password: str) -> None:
     trace_id = str(uuid.uuid4())
     typer.echo(f"trace_id={trace_id}  limit={limit}  concurrency={concurrency}")
 
     async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as client:
+        token_resp = await client.post(
+            "/token",
+            data={"username": username, "password": password},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        token_resp.raise_for_status()
+        token = token_resp.json()["access_token"]
+
         resp = await client.get("/prompts", params={"limit": limit})
         resp.raise_for_status()
         prompts = resp.json()
@@ -121,7 +131,7 @@ async def _run(limit: int, concurrency: int, base_url: str) -> None:
 
     typer.echo(f"Refreshing {len(prompts)} prompt(s)…")
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=10.0, headers={"Authorization": f"Bearer {token}"}) as client:
         refresher = PromptRefresher(client, trace_id, concurrency)
         jobs = [RefreshJob(p["id"], p["title"]) for p in prompts]
         counts = await refresher.refresh_all(jobs)
